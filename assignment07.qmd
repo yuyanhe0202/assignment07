@@ -1,6 +1,6 @@
 ---
-title: "assingment07"
-author: "Yuyan He"
+title: "Assingment07: Machine Learning "
+author: "Yuyan He and Fartun Adan"
 format: html
 editor: visual
 editor_options: 
@@ -11,15 +11,17 @@ execute:
 embed-resources: true
 ---
 
-Exercise 01
+# Exercise 01:
+
+## 1. Estimate a Model
 
 ```{r}
 library(tidyverse)
 library(tidymodels)
 
-data <- read.csv("data/restaurant_grades.csv")
+data <- read.csv("restaurant_grades.csv")
 
-# 1. Estimate a Model
+
 ## split data
 set.seed(20201020)
 data_split <- initial_split(data = data, prop = 0.8)
@@ -52,8 +54,11 @@ predictions <- bind_cols(
   predict(object = cart_fit, new_data = data_test),
   predict(object = cart_fit, new_data = data_test, type = "prob")
 )
+```
 
-# 2. Evaluate the model
+## 2. Evaluate the Model
+
+```{r}
 ## confusion matrix
 predictions |>
   mutate(grade = factor(grade)) |>
@@ -70,71 +75,70 @@ predictions |>
   mutate(grade = factor(grade)) |>
   recall(truth = grade,
          estimate = .pred_class)
+```
 
-## Quality of the model:
-## The model has very high precision of 98.9%, and not so good recall of 74.0%.
+**Quality of the model:** The model has very high precision of 98.9%, and a moderate recall of 74.0%, missing many acutal positives.
 
-# 3. Improvement
+## 3. Improvement
+
+```{r}
 ## create a tree
 rpart.plot::rpart.plot(x = cart_fit$fit$fit$fit)
+```
 
-## I can see from the tree that the parting rule for predicting in this model are
-## inspection type and date. The inspection type might make sense, but the date
-## sounds a bit far fetched when it comes to grading. For better prediction, it
-## might be wise to remove date as a predictor for the model.
-## Besides, since we have so many variables in the dataset, maybe linear regression
-## is better model for such prediction as it could give a more comprehensive 
-## consideration of all the variables.
+We can see from the tree that the parting rule for predicting in this model are inspection type and date. The inspection type might make sense, but the date sounds a bit far fetched when it comes to grading. For better prediction, it might be wise to remove date as a predictor for the model. Besides, since we have so many variables in the dataset, maybe linear regression is better model for such prediction as it could give a more comprehensive consideration of all the variables.
 
-# 4. Variable importance
+## 4. Variable importance
+
+```{r}
 library(vip)
 cart_fit |>
   extract_fit_parsnip() |>
   vip(num_features = 10)
-
-## Comment: A higher feature importance score indicates that the feature plays 
-## a more crucial role in the decision-making process of the tree, leading to 
-## better separation of classes or more accurate predictions.In our case, inspection
-## type and inspection date have higher weights in the parting process, i.e. these
-## 2 variables mostly determined which grade to assign in our model.
-
-# 5. Application
-## By interpreting confusion matrix and check variable importance, the ombudsman
-## could use this model to check if there is any systematic grading bias, which
-## is related to certain inspection type, date etc. They could better allocate 
-## manpower and make sure the grading is credible.
-
 ```
 
-Exercise 02
+Comment: A higher feature importance score indicates that the feature plays a more crucial role in the decision-making process of the tree, leading to better separation of classes or more accurate predictions. In our case, inspection type and inspection date have higher weights in the parting process, i.e. these 2 variables mostly determined which grade to assign in our model.
+
+## 5. Application
+
+By interpreting confusion matrix and check variable importance, the ombudsman could use this model to check if there is any systematic grading bias, which is related to certain inspection type, date etc. They could better allocate manpower and make sure the grading is credible.
+
+# Exercise 02:
+
+**Set up the data:**
 
 ```{r}
-# set up the data
 Chicago_modeling <- Chicago |>
 slice(1:5678)
 
 Chicago_implementation <- Chicago |>
 slice(5679:5698) |>
 select(-ridership)
+```
 
+## 1. Convert date into a usable variable
 
-# 1. Convert date into a usable variable
+```{r}
+
 library(lubridate)
 
 Chicago_modeling <- Chicago_modeling |>
   mutate(weekday = wday(date, label = TRUE, locale = "English")) |>
   mutate(month = month(date, label = TRUE, locale = "English")) |>
   mutate(yearday = yday(date))
+```
 
+## 2. Set up a testing environment
 
-# 2. Set up a testing environment
+```{r}
 set.seed(20211101)
+
 ## Split data
 chicago_split <- initial_split(data = Chicago_modeling, prop = 0.75)
 chicago_train <- training(x = chicago_split)
 chicago_test <- testing(x = chicago_split)
 
-## EDA
+## Exploratory Data Analysis
 chicago_train |>
   ggplot(aes(x = weekday)) +
   geom_bar() +
@@ -147,34 +151,46 @@ chicago_train |>
 
 ## v-fold
 folds <- vfold_cv(data = chicago_train, v = 10, repeats = 1)
+```
 
+## 3. Test different approaches
 
-# 3. Test different approaches
+Create a recipe:
+
+```{r}
 chicago_rec <- 
   recipe(ridership ~ ., data = chicago_train) %>%
   step_holiday(date) |>
   step_rm(date) |>
   step_dummy(all_nominal_predictors())
 
-## Model 1: Lasso
+```
+
+### Model 1: Lasso:
+
+```{r}
 ## create a tuning grid for lasso regularization, varying the regularization penalty
 lasso_grid <- grid_regular(penalty(), levels = 10)
+
 ## Lasso specification
 lasso_mod <- linear_reg(
   penalty = tune(), 
   mixture = 1
 ) %>%
   set_engine("glmnet")
+
 ## Lasso workflow
 lasso_wf <- workflow() %>%
   add_recipe(chicago_rec) %>%
   add_model(lasso_mod)
+
 ## fit
 lasso_cv <- lasso_wf %>%
   tune_grid(
     resamples = folds,
     grid = lasso_grid
   )
+
 ## Calculate RMSE
 lasso_rmse <- lasso_cv %>%
   collect_metrics(summarize = FALSE) %>%
@@ -194,7 +210,11 @@ lasso_rmse |>
 ## Mean RMSE across 10 folds
 mean(lasso_rmse$.estimate)
 
-## Model 2: Random Forest
+```
+
+### Model 2: Random Forest:
+
+```{r}
 rf_mod <- rand_forest() |>
   set_mode(mode = "regression") |>
   set_engine(
@@ -225,8 +245,11 @@ rf_rmse |>
   theme_minimal()
 ## Mean RMSE across 10 folds
 mean(rf_rmse$.estimate)
+```
 
-## Model 3: Decision tree
+### Model 3: Decision Tree:
+
+```{r}
 dt_mod <-
   decision_tree() %>%
   set_engine(engine = "rpart") %>%
@@ -255,8 +278,11 @@ dt_rmse |>
 ## Mean RMSE across 10 folds
 mean(dt_rmse$.estimate) 
 
+```
 
-# 4. Estimate the out-of-sample error rate
+## 4. Estimate the out-of-sample error rate
+
+```{r}
 ## get the best model from random forest as it has the lowest RMSE
 rf_best <- rf_resamples %>%
   select_best(metric = "rmse")
@@ -272,9 +298,11 @@ test_pred <- chicago_test %>%
   bind_cols(test_pred)
 
 rmse(test_pred, truth = ridership, estimate = .pred)
+```
 
+## 5. Implement the final model
 
-# 5. Implement the final model
+```{r}
 ## get the date related variables on the implementation data
 Chicago_implementation <- Chicago_implementation |>
   mutate(weekday = wday(date, label = TRUE, locale = "English")) |>
@@ -284,20 +312,18 @@ Chicago_implementation <- Chicago_implementation |>
 ## predict on implementation data
 implementation_pred <- predict(final_fit, Chicago_implementation)
 implementation_pred
+```
 
+## 6. Briefly describe your final model
 
-# 6. Briefly describe your final model
+```{r}
 library(vip)
 ## important predictors
 final_fit |>
   extract_fit_parsnip() |>
   vip(num_features = 10)
-
-## I think the model is working well (1) globally, when I applied it to the 
-## test data, I get similar RMSE like I got from the training data  
-## (2) locally, the model has the lowest RMSE in the training data
-## The most important predictors including weekday and lagging ridership statistics
-## from different stations, especially the lagging stat from the station ClarK/Lake
-## itself.
-
 ```
+
+The model is working well (1) globally, when we applied it to the test data, we get similar RMSE like we got from the training data (2) locally, the model has the lowest RMSE in the training data
+
+The most important predictors including weekday and lagging ridership statistics from different stations, especially the lagging stat from the station ClarK/Lake itself.
