@@ -1,0 +1,303 @@
+---
+title: "assingment07"
+author: "Yuyan He"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+execute:
+  warning: false
+  message: false
+embed-resources: true
+---
+
+Exercise 01
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+
+data <- read.csv("data/restaurant_grades.csv")
+
+# 1. Estimate a Model
+## split data
+set.seed(20201020)
+data_split <- initial_split(data = data, prop = 0.8)
+data_train <- training(x = data_split)
+data_test <- testing(x = data_split)
+
+## create a recipe
+cart_rec <- 
+  recipe(grade ~ ., data = data_train) %>%
+  themis::step_downsample(grade)
+
+## create a cart model object
+cart_mod <-
+  decision_tree() %>%
+  set_engine(engine = "rpart") %>%
+  set_mode(mode = "classification")
+
+## workflow
+cart_wf <- workflow() %>%
+  add_recipe(cart_rec) %>%
+  add_model(cart_mod)
+
+## fit the model
+cart_fit <- cart_wf %>%
+  fit(data = data_train)
+
+## predict the predicted class and the predicted probability of each class
+predictions <- bind_cols(
+  data_test,
+  predict(object = cart_fit, new_data = data_test),
+  predict(object = cart_fit, new_data = data_test, type = "prob")
+)
+
+# 2. Evaluate the model
+## confusion matrix
+predictions |>
+  mutate(grade = factor(grade)) |>
+  conf_mat(truth = grade,
+           estimate = .pred_class)
+
+## calculating precision and recall
+predictions |>
+  mutate(grade = factor(grade)) |>
+  precision(truth = grade,
+            estimate = .pred_class)
+
+predictions |>
+  mutate(grade = factor(grade)) |>
+  recall(truth = grade,
+         estimate = .pred_class)
+
+## Quality of the model:
+## The model has very high precision of 98.9%, and not so good recall of 74.0%.
+
+# 3. Improvement
+## create a tree
+rpart.plot::rpart.plot(x = cart_fit$fit$fit$fit)
+
+## I can see from the tree that the parting rule for predicting in this model are
+## inspection type and date. The inspection type might make sense, but the date
+## sounds a bit far fetched when it comes to grading. For better prediction, it
+## might be wise to remove date as a predictor for the model.
+## Besides, since we have so many variables in the dataset, maybe linear regression
+## is better model for such prediction as it could give a more comprehensive 
+## consideration of all the variables.
+
+# 4. Variable importance
+library(vip)
+cart_fit |>
+  extract_fit_parsnip() |>
+  vip(num_features = 10)
+
+## Comment: A higher feature importance score indicates that the feature plays 
+## a more crucial role in the decision-making process of the tree, leading to 
+## better separation of classes or more accurate predictions.In our case, inspection
+## type and inspection date have higher weights in the parting process, i.e. these
+## 2 variables mostly determined which grade to assign in our model.
+
+# 5. Application
+## By interpreting confusion matrix and check variable importance, the ombudsman
+## could use this model to check if there is any systematic grading bias, which
+## is related to certain inspection type, date etc. They could better allocate 
+## manpower and make sure the grading is credible.
+
+```
+
+Exercise 02
+
+```{r}
+# set up the data
+Chicago_modeling <- Chicago |>
+slice(1:5678)
+
+Chicago_implementation <- Chicago |>
+slice(5679:5698) |>
+select(-ridership)
+
+
+# 1. Convert date into a usable variable
+library(lubridate)
+
+Chicago_modeling <- Chicago_modeling |>
+  mutate(weekday = wday(date, label = TRUE, locale = "English")) |>
+  mutate(month = month(date, label = TRUE, locale = "English")) |>
+  mutate(yearday = yday(date))
+
+
+# 2. Set up a testing environment
+set.seed(20211101)
+## Split data
+chicago_split <- initial_split(data = Chicago_modeling, prop = 0.75)
+chicago_train <- training(x = chicago_split)
+chicago_test <- testing(x = chicago_split)
+
+## EDA
+chicago_train |>
+  ggplot(aes(x = weekday)) +
+  geom_bar() +
+  theme_minimal()
+
+chicago_train |>
+  ggplot(aes(x = month)) +
+  geom_bar() +
+  theme_minimal()
+
+## v-fold
+folds <- vfold_cv(data = chicago_train, v = 10, repeats = 1)
+
+
+# 3. Test different approaches
+chicago_rec <- 
+  recipe(ridership ~ ., data = chicago_train) %>%
+  step_holiday(date) |>
+  step_rm(date) |>
+  step_dummy(all_nominal_predictors())
+
+## Model 1: Lasso
+## create a tuning grid for lasso regularization, varying the regularization penalty
+lasso_grid <- grid_regular(penalty(), levels = 10)
+## Lasso specification
+lasso_mod <- linear_reg(
+  penalty = tune(), 
+  mixture = 1
+) %>%
+  set_engine("glmnet")
+## Lasso workflow
+lasso_wf <- workflow() %>%
+  add_recipe(chicago_rec) %>%
+  add_model(lasso_mod)
+## fit
+lasso_cv <- lasso_wf %>%
+  tune_grid(
+    resamples = folds,
+    grid = lasso_grid
+  )
+## Calculate RMSE
+lasso_rmse <- lasso_cv %>%
+  collect_metrics(summarize = FALSE) %>%
+  filter(.metric == "rmse")
+## Plot RMSE
+lasso_rmse |>
+  group_by(id) |>
+  summarize(RMSE = mean(.estimate)) |>
+  ggplot(aes(x = id, y = RMSE)) +
+  geom_point() +
+  labs(
+    x = "Fold id",
+    y = "RMSE",
+    title = "Lasso RMSE Across Penalty Values"
+  ) +
+  theme_minimal()
+## Mean RMSE across 10 folds
+mean(lasso_rmse$.estimate)
+
+## Model 2: Random Forest
+rf_mod <- rand_forest() |>
+  set_mode(mode = "regression") |>
+  set_engine(
+    engine = "ranger", 
+    importance = "impurity",
+    num.threads = 4
+  )
+## Random forest workflow
+rf_wf <- workflow() |>
+  add_recipe(chicago_rec) |>
+  add_model(rf_mod)
+## fit
+rf_resamples <- rf_wf |>
+  fit_resamples(resamples = folds)
+## Calculate RMSE
+rf_rmse <- rf_resamples %>%
+  collect_metrics(summarize = FALSE) %>%
+  filter(.metric == "rmse")
+## Plot RMSE
+rf_rmse |>
+  ggplot(aes(x = id, y = .estimate)) +
+  geom_point() +
+  labs(
+    x = "Fold id",
+    y = "RMSE",
+    title = "Random Forest RMSE Across Penalty Values"
+  ) +
+  theme_minimal()
+## Mean RMSE across 10 folds
+mean(rf_rmse$.estimate)
+
+## Model 3: Decision tree
+dt_mod <-
+  decision_tree() %>%
+  set_engine(engine = "rpart") %>%
+  set_mode(mode = "regression")
+## Decision tree workflow
+dt_wf <- workflow() %>%
+  add_recipe(chicago_rec) %>%
+  add_model(dt_mod)
+## fit
+dt_resamples <- dt_wf %>%
+  fit_resamples(resamples = folds)
+## Calculate RMSE
+dt_rmse <- dt_resamples %>%
+  collect_metrics(summarize = FALSE) %>%
+  filter(.metric == "rmse")
+## Plot RMSE
+dt_rmse |>
+  ggplot(aes(x = id, y = .estimate)) +
+  geom_point() +
+  labs(
+    x = "Fold id",
+    y = "RMSE",
+    title = "Decision Tree RMSE Across Penalty Values"
+  ) +
+  theme_minimal()
+## Mean RMSE across 10 folds
+mean(dt_rmse$.estimate) 
+
+
+# 4. Estimate the out-of-sample error rate
+## get the best model from random forest as it has the lowest RMSE
+rf_best <- rf_resamples %>%
+  select_best(metric = "rmse")
+
+## generate final workflow, fit, and predict on test data
+final_wf <- finalize_workflow(rf_wf, rf_best)
+final_fit <- final_wf %>% fit(data = chicago_train)
+test_pred <- predict(final_fit, chicago_test)
+
+## getting rmse
+test_pred <- chicago_test %>%
+  select(ridership) %>%
+  bind_cols(test_pred)
+
+rmse(test_pred, truth = ridership, estimate = .pred)
+
+
+# 5. Implement the final model
+## get the date related variables on the implementation data
+Chicago_implementation <- Chicago_implementation |>
+  mutate(weekday = wday(date, label = TRUE, locale = "English")) |>
+  mutate(month = month(date, label = TRUE, locale = "English")) |>
+  mutate(yearday = yday(date))
+
+## predict on implementation data
+implementation_pred <- predict(final_fit, Chicago_implementation)
+implementation_pred
+
+
+# 6. Briefly describe your final model
+library(vip)
+## important predictors
+final_fit |>
+  extract_fit_parsnip() |>
+  vip(num_features = 10)
+
+## I think the model is working well (1) globally, when I applied it to the 
+## test data, I get similar RMSE like I got from the training data  
+## (2) locally, the model has the lowest RMSE in the training data
+## The most important predictors including weekday and lagging ridership statistics
+## from different stations, especially the lagging stat from the station ClarK/Lake
+## itself.
+
+```
