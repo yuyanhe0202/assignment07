@@ -19,7 +19,7 @@ embed-resources: true
 library(tidyverse)
 library(tidymodels)
 
-data <- read.csv("restaurant_grades.csv")
+data <- read.csv("data/restaurant_grades.csv")
 
 
 ## split data
@@ -77,7 +77,8 @@ predictions |>
          estimate = .pred_class)
 ```
 
-**Quality of the model:** The model has very high precision of 98.9%, and a moderate recall of 74.0%, missing many acutal positives.
+**Quality of the model:** The model has very high precision of 98.9%, and a 
+moderate recall of 74.0%, missing many actual positives.
 
 ## 3. Improvement
 
@@ -86,7 +87,13 @@ predictions |>
 rpart.plot::rpart.plot(x = cart_fit$fit$fit$fit)
 ```
 
-We can see from the tree that the parting rule for predicting in this model are inspection type and date. The inspection type might make sense, but the date sounds a bit far fetched when it comes to grading. For better prediction, it might be wise to remove date as a predictor for the model. Besides, since we have so many variables in the dataset, maybe linear regression is better model for such prediction as it could give a more comprehensive consideration of all the variables.
+We can see from the tree that the parting rule for predicting in this model are 
+inspection type and date. The inspection type might make sense, but the date 
+sounds a bit far fetched when it comes to grading. For better prediction, it 
+might be wise to remove date as a predictor for the model. Besides, since we 
+have so many variables in the dataset, maybe linear regression is better model 
+for such prediction as it could give a more comprehensive consideration of all 
+the variables.
 
 ## 4. Variable importance
 
@@ -97,11 +104,18 @@ cart_fit |>
   vip(num_features = 10)
 ```
 
-Comment: A higher feature importance score indicates that the feature plays a more crucial role in the decision-making process of the tree, leading to better separation of classes or more accurate predictions. In our case, inspection type and inspection date have higher weights in the parting process, i.e. these 2 variables mostly determined which grade to assign in our model.
+Comment: A higher feature importance score indicates that the feature plays a 
+more crucial role in the decision-making process of the tree, leading to better 
+separation of classes or more accurate predictions. In our case, inspection type
+and inspection date have higher weights in the parting process, i.e. these 2 
+variables mostly determined which grade to assign in our model.
 
 ## 5. Application
 
-By interpreting confusion matrix and check variable importance, the ombudsman could use this model to check if there is any systematic grading bias, which is related to certain inspection type, date etc. They could better allocate manpower and make sure the grading is credible.
+By interpreting confusion matrix and check variable importance, the ombudsman 
+could use this model to check if there is any systematic grading bias, which is 
+related to certain inspection type, date etc. They could better allocate manpower
+and make sure the grading is credible.
 
 # Exercise 02:
 
@@ -195,6 +209,7 @@ lasso_cv <- lasso_wf %>%
 lasso_rmse <- lasso_cv %>%
   collect_metrics(summarize = FALSE) %>%
   filter(.metric == "rmse")
+
 ## Plot RMSE
 lasso_rmse |>
   group_by(id) |>
@@ -207,6 +222,7 @@ lasso_rmse |>
     title = "Lasso RMSE Across Penalty Values"
   ) +
   theme_minimal()
+
 ## Mean RMSE across 10 folds
 mean(lasso_rmse$.estimate)
 
@@ -222,17 +238,21 @@ rf_mod <- rand_forest() |>
     importance = "impurity",
     num.threads = 4
   )
+
 ## Random forest workflow
 rf_wf <- workflow() |>
   add_recipe(chicago_rec) |>
   add_model(rf_mod)
+
 ## fit
 rf_resamples <- rf_wf |>
   fit_resamples(resamples = folds)
+
 ## Calculate RMSE
 rf_rmse <- rf_resamples %>%
   collect_metrics(summarize = FALSE) %>%
   filter(.metric == "rmse")
+
 ## Plot RMSE
 rf_rmse |>
   ggplot(aes(x = id, y = .estimate)) +
@@ -243,6 +263,7 @@ rf_rmse |>
     title = "Random Forest RMSE Across Penalty Values"
   ) +
   theme_minimal()
+
 ## Mean RMSE across 10 folds
 mean(rf_rmse$.estimate)
 ```
@@ -254,17 +275,21 @@ dt_mod <-
   decision_tree() %>%
   set_engine(engine = "rpart") %>%
   set_mode(mode = "regression")
+
 ## Decision tree workflow
 dt_wf <- workflow() %>%
   add_recipe(chicago_rec) %>%
   add_model(dt_mod)
+
 ## fit
 dt_resamples <- dt_wf %>%
   fit_resamples(resamples = folds)
+
 ## Calculate RMSE
 dt_rmse <- dt_resamples %>%
   collect_metrics(summarize = FALSE) %>%
   filter(.metric == "rmse")
+
 ## Plot RMSE
 dt_rmse |>
   ggplot(aes(x = id, y = .estimate)) +
@@ -275,6 +300,7 @@ dt_rmse |>
     title = "Decision Tree RMSE Across Penalty Values"
   ) +
   theme_minimal()
+
 ## Mean RMSE across 10 folds
 mean(dt_rmse$.estimate) 
 
@@ -324,6 +350,10 @@ final_fit |>
   vip(num_features = 10)
 ```
 
-The model is working well (1) globally, when we applied it to the test data, we get similar RMSE like we got from the training data (2) locally, the model has the lowest RMSE in the training data
+The model is working well (1) globally, when we applied it to the test data, we 
+get similar RMSE like we got from the training data (2) locally, the model has 
+the lowest RMSE in the training data
 
-The most important predictors including weekday and lagging ridership statistics from different stations, especially the lagging stat from the station ClarK/Lake itself.
+The most important predictors including weekday and lagging ridership statistics
+from different stations, especially the lagging stat from the station ClarK/Lake
+itself.
