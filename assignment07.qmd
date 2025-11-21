@@ -77,8 +77,7 @@ predictions |>
          estimate = .pred_class)
 ```
 
-**Quality of the model:** The model has very high precision of 98.9%, and a 
-moderate recall of 74.0%, missing many actual positives.
+**Quality of the model:** The model has very high precision of 98.9%, and a moderate recall of 74.0%, missing many actual positives.
 
 ## 3. Improvement
 
@@ -87,13 +86,7 @@ moderate recall of 74.0%, missing many actual positives.
 rpart.plot::rpart.plot(x = cart_fit$fit$fit$fit)
 ```
 
-We can see from the tree that the parting rule for predicting in this model are 
-inspection type and date. The inspection type might make sense, but the date 
-sounds a bit far fetched when it comes to grading. For better prediction, it 
-might be wise to remove date as a predictor for the model. Besides, since we 
-have so many variables in the dataset, maybe linear regression is better model 
-for such prediction as it could give a more comprehensive consideration of all 
-the variables.
+We can see from the tree that the parting rule for predicting in this model are inspection type and date. The inspection type might make sense, but the date sounds a bit far fetched when it comes to grading. For better prediction, it might be wise to remove date as a predictor for the model. Besides, since we have so many variables in the dataset, maybe linear regression is better model for such prediction as it could give a more comprehensive consideration of all the variables.
 
 ## 4. Variable importance
 
@@ -104,18 +97,11 @@ cart_fit |>
   vip(num_features = 10)
 ```
 
-Comment: A higher feature importance score indicates that the feature plays a 
-more crucial role in the decision-making process of the tree, leading to better 
-separation of classes or more accurate predictions. In our case, inspection type
-and inspection date have higher weights in the parting process, i.e. these 2 
-variables mostly determined which grade to assign in our model.
+Comment: A higher feature importance score indicates that the feature plays a more crucial role in the decision-making process of the tree, leading to better separation of classes or more accurate predictions. In our case, inspection type and inspection date have higher weights in the parting process, i.e. these 2 variables mostly determined which grade to assign in our model.
 
 ## 5. Application
 
-By interpreting confusion matrix and check variable importance, the ombudsman 
-could use this model to check if there is any systematic grading bias, which is 
-related to certain inspection type, date etc. They could better allocate manpower
-and make sure the grading is credible.
+By interpreting confusion matrix and check variable importance, the ombudsman could use this model to check if there is any systematic grading bias, which is related to certain inspection type, date etc. They could better allocate manpower and make sure the grading is credible.
 
 # Exercise 02:
 
@@ -350,10 +336,8 @@ final_fit |>
   vip(num_features = 10)
 ```
 
-The model is working well (1) globally, when we applied it to the test data, we 
-get similar RMSE like we got from the training data (2) locally, the model has 
-the lowest RMSE in the training data
+The model is working well, as when we applied it to the test data, we get similar RMSE like we got from the training data, and the model has the lowest RMSE in the training data.
 
-The most important predictors including weekday and lagging ridership statistics
-from different stations, especially the lagging stat from the station ClarK/Lake
-itself.
+Since this is a random forest model, which is referred to as a black box model, it is neither globally nor locally interpretable.
+
+The most important predictors including weekday and lagging ridership statistics from different stations, especially the lagging stat from the station Clark/Lake itself.
